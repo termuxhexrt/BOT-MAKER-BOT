@@ -62,15 +62,15 @@ function getTemporalAnchor() {
 // --- DESTROYER PERSONAS ---
 const PERSONAS = {
     ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file project.
-1. Provide a "PROJECT_OVERVIEW" in markdown (3-4 sentences about features and architecture).
-2. Provide a "FILE_LIST" in JSON format at the end.
+1. Provide a "PROJECT_OVERVIEW" in markdown.
+2. Provide a "FILE_LIST" in JSON array format at the very end. 
 FORMAT:
 [OVERVIEW_START]
 Markdown here...
 [OVERVIEW_END]
 [FILE_LIST: ["file1.ext", "file2.ext"]]
 
-Focus on "Destroyer" level quality and deep security.`,
+CRITICAL: The FILE_LIST must be a valid JSON array of strings. No extra text inside the brackets.`,
 
     BUILDER: `You are GHOST-BUILDER. Write HIGH-END, professional code for a specific file.
 Ensure the code is COMPLETE, massive in scope if needed, and fully functional.
@@ -112,9 +112,26 @@ async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
     const overviewMatch = planContent.match(/\[OVERVIEW_START\]([\s\S]*?)\[OVERVIEW_END\]/);
     const overviewText = overviewMatch ? overviewMatch[1].trim() : "🚀 Destroyer Mission Initialized.";
 
-    // Extract File List
-    const fileListMatch = planContent.match(/\[FILE_LIST:\s*(\[.*?\])\]/s);
-    const filesToBuild = fileListMatch ? JSON.parse(fileListMatch[1]) : ["index.js", "package.json", "README.md"];
+    // Extract File List Robustly
+    let filesToBuild = ["main.py", "requirements.txt"];
+    try {
+        const fileListMatch = planContent.match(/\[FILE_LIST:\s*([\s\S]*?)\]/);
+        if (fileListMatch) {
+            let jsonStr = fileListMatch[1].trim();
+            // Remove potential markdown code block markers
+            jsonStr = jsonStr.replace(/```json|```/g, '').trim();
+            // Find the start [ and end ]
+            const startIdx = jsonStr.indexOf('[');
+            const endIdx = jsonStr.lastIndexOf(']');
+            if (startIdx !== -1 && endIdx !== -1) {
+                jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+                filesToBuild = JSON.parse(jsonStr);
+            }
+        }
+    } catch (e) {
+        console.error("Architect JSON Parse Error:", e);
+        // Fallback to basic files if JSON fails
+    }
 
     const finalFiles = [];
     let progress = 0;
