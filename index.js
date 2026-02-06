@@ -208,21 +208,25 @@ async function getContext(guild) {
 
 function parseFiles(content) {
     const files = [];
-    // Flexible regex: handles optional [FILE_END], looks ahead for next [FILE_START] or end of string
     const regex = /\[FILE_START:(.+?)\]([\s\S]*?)(?=\[FILE_START:|\[FILE_END\]|$)/g;
     let match;
     while ((match = regex.exec(content)) !== null) {
-        let fileName = match[1].trim().replace(/[*#]/g, ''); // Clean name
+        let fileName = match[1].trim().replace(/[*#]/g, '');
         let fileContent = match[2].trim();
-
-        // Strip out triple backticks if the AI accidentally wrapped the content
         fileContent = fileContent.replace(/^```[a-z]*\n/i, '').replace(/\n```$/m, '');
-
         if (fileName && fileContent) {
             files.push({ name: fileName, content: fileContent });
         }
     }
     return files;
+}
+
+async function safeReply(message, content, options = {}) {
+    if (content.length > 2000) {
+        const truncated = content.slice(0, 1900).split('\n').slice(0, -1).join('\n') + '\n\n**... (Output Truncated - Check ZIP for full plan)**';
+        return message.reply({ content: truncated, ...options });
+    }
+    return message.reply({ content, ...options });
 }
 
 
@@ -274,7 +278,8 @@ client.on('messageCreate', async (message) => {
                     new ButtonBuilder().setCustomId('tweak_last').setLabel('Tweak Last').setStyle(ButtonStyle.Primary)
                 );
                 await statusMsg.edit({ embeds: [statusEmbed], components: [row] });
-                await message.reply({ content: `🔱 **GOD-MODE-DEPLOYED**\n\n${overview.slice(0, 1000)}`, files: [attachment] });
+                const displayOverview = overview.length > 1500 ? overview.slice(0, 1500).split('\n').slice(0, -1).join('\n') + '\n\n**[Full breakdown inside project ZIP]**' : overview;
+                await safeReply(message, `🔱 **GOD-MODE-DEPLOYED**\n\n${displayOverview}`, { files: [attachment] });
             } else {
                 statusEmbed.setDescription('❌ Swarm failed to generate files.');
                 await statusMsg.edit({ embeds: [statusEmbed] });
@@ -303,13 +308,13 @@ client.on('messageCreate', async (message) => {
 
         const reply = response.choices[0].message.content;
         await saveGhostState(message.author.id, { ...state, lastPlan: reply }); // Save planning context
-        return message.reply(`💬 **GHOST-PLANNING-SESSION**\n\n${reply}`);
+        return safeReply(message, `💬 **GHOST-PLANNING-SESSION**\n\n${reply}`);
     }
 
     // COMMAND: !tweak
     if (command === 'tweak') {
         const state = await getGhostState(message.author.id);
-        if (!state) return message.reply('Pehle kuch banwa toh lo! Use `!spawn` first.');
+        if (!state) return safeReply(message, 'Pehle kuch banwa toh lo! Use `!spawn` first.');
 
         const tweakRequest = args.join(' ');
         if (!tweakRequest) return message.reply('Bhai, kya change karna hai? `!tweak <instruction>`');
@@ -337,7 +342,8 @@ client.on('messageCreate', async (message) => {
                 files.forEach(f => zip.addFile(f.name, Buffer.from(f.content, 'utf8')));
                 const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'tweak_godmode_project.zip' });
                 await statusMsg.edit({ embeds: [statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Tweak Successful!')] });
-                await message.reply({ content: `🔄 **TWEAK-DEPLOYED**\n\n${overview.slice(0, 500)}...`, files: [attachment] });
+                const displayOverview = overview.length > 1500 ? overview.slice(0, 1500).split('\n').slice(0, -1).join('\n') + '\n\n**[Full breakdown inside project ZIP]**' : overview;
+                await safeReply(message, `🔄 **TWEAK-DEPLOYED**\n\n${displayOverview}`, { files: [attachment] });
             } else {
                 await statusMsg.edit({ content: 'Complete.', embeds: [] });
             }
