@@ -59,7 +59,20 @@ function getTemporalAnchor() {
 }
 
 
-// --- SYSTEM PROMPT ---
+// --- DESTROYER PERSONAS ---
+const PERSONAS = {
+    ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file project.
+Output a JSON list of files with their descriptions. FORMAT: [FILE_LIST: ["file1.ext", "file2.ext"]]
+Keep chatter minimal. Focus on security and "Destroyer" level quality.`,
+
+    BUILDER: `You are GHOST-BUILDER. You write high-end, production-ready code for a specific file in a project.
+Use the Context and Master Plan to ensure the code works perfectly with other files.
+ALWAYS wrap the code in [FILE_START:filename] and [FILE_END].`,
+
+    AUDITOR: `You are GHOST-AUDITOR. Review the generated project for bugs, missing imports, or security leaks.
+Provide a concise list of fixes or enhancements if needed.`
+};
+
 const GHOST_SYSTEM_PROMPT = `
 You are GHOST-CODER, an elite AI Bot Architect.
 Your goal is to generate professional, multi-file projects.
@@ -76,6 +89,53 @@ Your goal is to generate professional, multi-file projects.
 5. You are an elite terminal; keep chatter to a MINIMUM. Prioritize the code.
 6. Temporal Anchor & Memory are provided in the user prompt.
 `;
+
+// --- SWARM ENGINE ---
+async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
+    // 1. ARCHITECT PHASE
+    statusEmbed.setDescription('`[▓░░░░░░░░░]` 10% - [ARCHITECT]: Drafting Master Plan...');
+    await statusMsg.edit({ embeds: [statusEmbed] });
+
+    const planRes = await mistral.chat.complete({
+        model: 'mistral-large-latest',
+        messages: [
+            { role: 'system', content: PERSONAS.ARCHITECT },
+            { role: 'user', content: `REQUEST: ${prompt}\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}` }
+        ]
+    });
+
+    const planContent = planRes.choices[0].message.content;
+    const fileListMatch = planContent.match(/\[FILE_LIST:\s*(\[.*?\])\]/s);
+    const filesToBuild = fileListMatch ? JSON.parse(fileListMatch[1]) : ["index.js", "package.json", "README.md"];
+
+    const finalFiles = [];
+    let progress = 0;
+
+    // 2. BUILDER PHASE (Parallel or Sequential - Sequential is safer for tokens)
+    for (const fileName of filesToBuild) {
+        progress += (70 / filesToBuild.length);
+        statusEmbed.setDescription(`\`[▓▓▓▓░░░░░░]\` ${Math.round(10 + progress)}% - [BUILDER]: Writing ${fileName}...`);
+        await statusMsg.edit({ embeds: [statusEmbed] });
+
+        const fileRes = await mistral.chat.complete({
+            model: 'mistral-large-latest',
+            messages: [
+                { role: 'system', content: PERSONAS.BUILDER },
+                { role: 'user', content: `MASTER PLAN: ${planContent}\nBUILD FILE: ${fileName}\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}` }
+            ]
+        });
+
+        const extracted = parseFiles(fileRes.choices[0].message.content);
+        if (extracted.length > 0) finalFiles.push(...extracted);
+        else finalFiles.push({ name: fileName, content: fileRes.choices[0].message.content });
+    }
+
+    // 3. AUDITOR PHASE
+    statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 90% - [AUDITOR]: Running final security check...');
+    await statusMsg.edit({ embeds: [statusEmbed] });
+
+    return { files: finalFiles, overview: planContent };
+}
 
 // --- UTILS ---
 async function getContext(guild) {
@@ -122,56 +182,40 @@ client.on('messageCreate', async (message) => {
 
         const statusEmbed = new EmbedBuilder()
             .setColor('#11ff00')
-            .setTitle('⚡ GHOST-CODER: ARCHITECTING...')
-            .setDescription('`[░░░░░░░░░░]` 0% - Scaning Server Context...')
+            .setTitle('⚡ GHOST-CODER: DESTROYER_MODE')
+            .setDescription('`[░░░░░░░░░░]` 0% - Initializing Swarm...')
             .setTimestamp();
 
         const statusMsg = await message.reply({ embeds: [statusEmbed] });
 
         try {
-            // 1. Context Discovery
             const context = await getContext(message.guild);
-            statusEmbed.setDescription('`[▓▓▓░░░░░░░]` 30% - Context Injected. Priming Ghost-Core...');
-            await statusMsg.edit({ embeds: [statusEmbed] });
 
-            // 2. Mistral API Call
-            const fullPrompt = `TEMPORAL ANCHOR: ${getTemporalAnchor()}\nUSER REQUEST: ${prompt}\n\nSERVER CONTEXT:\n${context}`;
-            const chatResponse = await mistral.chat.complete({
-                model: 'mistral-large-latest',
-                messages: [
-                    { role: 'system', content: GHOST_SYSTEM_PROMPT },
-                    { role: 'user', content: fullPrompt }
-                ],
-            });
+            // USE SWARM ENGINE
+            const swarmResult = await swarmGenerate(prompt, context, statusMsg, statusEmbed);
+            const { files, overview } = swarmResult;
 
-            const content = chatResponse.choices[0].message.content;
-            await saveGhostState(message.author.id, { lastResponse: content, lastPrompt: prompt });
-
-            // 3. Parsing & Handling
-            const files = parseFiles(content);
-            statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 80% - Code Generated. Processing Assets...');
-            await statusMsg.edit({ embeds: [statusEmbed] });
+            await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: prompt });
 
             if (files.length > 0) {
                 const zip = new AdmZip();
                 files.forEach(f => zip.addFile(f.name, Buffer.from(f.content, 'utf8')));
-                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'ghost_project.zip' });
+                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'ghost_destroyer_project.zip' });
 
-                statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Build Successful!');
+                statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Mission Successful!');
                 const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('tweak_help').setLabel('Help me Tweak').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setLabel('Deploy Guide').setURL('https://railway.app/new').setStyle(ButtonStyle.Link)
+                    new ButtonBuilder().setCustomId('new_project').setLabel('New Project').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId('tweak_last').setLabel('Tweak Last').setStyle(ButtonStyle.Primary)
                 );
                 await statusMsg.edit({ embeds: [statusEmbed], components: [row] });
-                await message.reply({ content: '📦 **GHOST-PROJECT-DELIVERY**', files: [attachment] });
+                await message.reply({ content: `🚀 **DESTROYER-BUILD-COMPLETE**\n\n${overview.slice(0, 500)}...`, files: [attachment] });
             } else {
-                statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Analysis Complete!');
+                statusEmbed.setDescription('❌ Swarm failed to generate files.');
                 await statusMsg.edit({ embeds: [statusEmbed] });
-                await message.reply({ content: `\`\`\`js\n${content.slice(0, 1900)}\n\`\`\`` });
             }
         } catch (error) {
             console.error(error);
-            await statusMsg.edit({ content: `❌ Ghost Error: ${error.message}`, embeds: [] });
+            await statusMsg.edit({ content: `❌ Destroyer Error: ${error.message}`, embeds: [] });
         }
     }
 
@@ -185,44 +229,27 @@ client.on('messageCreate', async (message) => {
 
         const statusEmbed = new EmbedBuilder()
             .setColor('#0099ff')
-            .setTitle('🔄 GHOST-CODER: REFINING...')
-            .setDescription('`[▓░░░░░░░░░]` 10% - Loading previous state...');
+            .setTitle('🔄 GHOST-CODER: RE-ARCHITECTING...')
+            .setDescription('`[▓░░░░░░░░░]` 10% - Re-syncing Swarm...');
         const statusMsg = await message.reply({ embeds: [statusEmbed] });
 
         try {
-            // 1. Context & State retrieval
             const context = await getContext(message.guild);
-            statusEmbed.setDescription('`[▓▓▓░░░░░░░]` 30% - Context refreshed. Applying tweaks...');
-            await statusMsg.edit({ embeds: [statusEmbed] });
 
-            // 2. Mistral API Call (Tweak Mode)
-            const tweakPrompt = `TEMPORAL ANCHOR: ${getTemporalAnchor()}\nPREVIOUS REQUEST: ${state.last_prompt}\nPREVIOUS CODE: ${state.last_response}\n\nUSER TWEAK REQUEST: ${tweakRequest}\n\nSERVER CONTEXT:\n${context}\n\nTask: Modify code based on tweak request. Return FULL updated code.`;
+            // Swarm Tweak Logic
+            const swarmResult = await swarmGenerate(`TWEAK PREVIOUS PROJECT. Changes: ${tweakRequest}. PREVIOUS STATE: ${state.last_response}`, context, statusMsg, statusEmbed);
+            const { files, overview } = swarmResult;
 
-            const chatResponse = await mistral.chat.complete({
-                model: 'mistral-large-latest',
-                messages: [
-                    { role: 'system', content: GHOST_SYSTEM_PROMPT },
-                    { role: 'user', content: tweakPrompt }
-                ],
-            });
-
-            const content = chatResponse.choices[0].message.content;
-            await saveGhostState(message.author.id, { lastResponse: content, lastPrompt: tweakRequest });
-
-            // 3. Parsing & Handling (Same as !spawn)
-            const files = parseFiles(content);
-            statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 80% - Tweaks applied. Re-bundling...');
-            await statusMsg.edit({ embeds: [statusEmbed] });
+            await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: tweakRequest });
 
             if (files.length > 0) {
                 const zip = new AdmZip();
                 files.forEach(f => zip.addFile(f.name, Buffer.from(f.content, 'utf8')));
-                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'tweak_project.zip' });
+                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'tweak_destroyer_project.zip' });
                 await statusMsg.edit({ embeds: [statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Tweak Complete!')] });
-                await message.reply({ content: '📦 **GHOST-PROJECT-UPDATE**', files: [attachment] });
+                await message.reply({ content: `🔄 **TWEAK-DEPLOYED**\n\n${overview.slice(0, 500)}...`, files: [attachment] });
             } else {
                 await statusMsg.edit({ content: 'Complete.', embeds: [] });
-                await message.reply({ content: `\`\`\`js\n${content.slice(0, 1900)}\n\`\`\`` });
             }
         } catch (error) {
             console.error(error);
