@@ -215,6 +215,38 @@ client.on('messageCreate', async (message) => {
             await statusMsg.edit({ content: `❌ Tweak Error: ${error.message}`, embeds: [] });
         }
     }
+
+    // COMMAND: !commands / !help
+    if (command === 'commands' || command === 'help') {
+        const helpEmbed = new EmbedBuilder()
+            .setColor('#11ff00')
+            .setTitle('📂 GHOST-CODER: COMMAND_LIST')
+            .setDescription('Elite Bot Architecture Interface')
+            .addFields(
+                { name: '`!spawn <prompt>`', value: 'Generate a new project (Automatic ZIP if multi-file).' },
+                { name: '`!tweak <instructions>`', value: 'Modify the last generated project using Ghost Memory.' },
+                { name: '`!ghost`', value: 'Open the Architect Dashboard.' }
+            )
+            .setTimestamp();
+        return message.reply({ embeds: [helpEmbed] });
+    }
+
+    // COMMAND: !ghost
+    if (command === 'ghost') {
+        const dashEmbed = new EmbedBuilder()
+            .setColor('#11ff00')
+            .setTitle('🖥️ GHOST-CODER: DASHBOARD')
+            .setDescription('Status: **Ghost-Core Online**\nMemory: **PostgreSQL Persistent**\nTarget: **Multi-Language / Polyglot**')
+            .setImage('https://i.imgur.com/kS5xS4M.png'); // Placeholder for aesthetic
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('new_project').setLabel('New Project').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('tweak_last').setLabel('Tweak Last').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setLabel('Cloud Setup').setURL('https://railway.app/').setStyle(ButtonStyle.Link)
+        );
+
+        return message.reply({ embeds: [dashEmbed], components: [row] });
+    }
 });
 
 client.once('ready', async () => {
