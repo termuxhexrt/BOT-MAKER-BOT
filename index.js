@@ -61,34 +61,31 @@ function getTemporalAnchor() {
 
 // --- GOD-MODE PERSONAS ---
 const PERSONAS = {
-    ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file "God-Mode" project.
-1. Provide a "PROJECT_OVERVIEW" in markdown (Features & Tech).
+    ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file project.
+1. Provide a "PROJECT_OVERVIEW" in markdown.
 2. Provide a "FILE_LIST" in JSON array format.
+
+FORMAT:
+[OVERVIEW_START]
+Markdown here...
+[OVERVIEW_END]
+[FILE_LIST: ["file1.ext", "file2.ext"]]
 
 RULES:
 - NO BLOAT: Only include dependencies strictly necessary for core features.
-- REALISM: Avoid experimental/quantum junk.
-- PRECISION: Every file must serve a clear purpose.
-[OVERVIEW_START]...[OVERVIEW_END]
-[FILE_LIST: ["file1.ext", "file2.ext"]]`,
+- REALISM: Avoid experimental junk.
+- PRECISION: Every file must serve a clear purpose.`,
 
-    // Expert Builders
     BACKEND: `You are GHOST-BACKEND. Write elite, efficient backend code. 
-Only import what you actually use. No requirement bloat. 
-wrap in [FILE_START:filename]...[FILE_END]`,
+Only import what you actually use. wrap in [FILE_START:filename]...[FILE_END]`,
 
-    FRONTEND: `You are GHOST-FRONTEND. Write premium UI code. 
-Focus on optimization and modern aesthetics without bloat. 
-wrap in [FILE_START:filename]...[FILE_END]`,
+    FRONTEND: `You are GHOST-FRONTEND. Write premium UI code. no bloat. wrap in [FILE_START:filename]...[FILE_END]`,
 
-    DATABASE: `You are GHOST-DB-ARCHITECT. Write clean, optimized schemas. 
-wrap in [FILE_START:filename]...[FILE_END]`,
+    DATABASE: `You are GHOST-DB-ARCHITECT. Write clean schemas. wrap in [FILE_START:filename]...[FILE_END]`,
 
-    SECURITY: `You are GHOST-SECURITY. Implement hardened, focused security logic. 
-Avoid hallucinating complex stacks; focus on the TASK. 
-wrap in [FILE_START:filename]...[FILE_END]`,
+    SECURITY: `You are GHOST-SECURITY. Implement hardened logic. wrap in [FILE_START:filename]...[FILE_END]`,
 
-    AUDITOR: `You are GHOST-AUDITOR. Final review for bugs, leaks, and logic flaws.`
+    AUDITOR: `You are GHOST-AUDITOR. Final check for bugs and logic.`
 };
 
 const GHOST_SYSTEM_PROMPT = `
@@ -128,10 +125,20 @@ async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
         const fileListMatch = planContent.match(/\[FILE_LIST:\s*([\s\S]*?)\]/);
         if (fileListMatch) {
             let jsonStr = fileListMatch[1].trim().replace(/```json|```/g, '');
-            filesToBuild = JSON.parse(jsonStr);
+            const startIdx = jsonStr.indexOf('[');
+            const endIdx = jsonStr.lastIndexOf(']');
+            if (startIdx !== -1 && endIdx !== -1) {
+                jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+                filesToBuild = JSON.parse(jsonStr);
+            }
         }
     } catch (e) {
-        filesToBuild = ["index.js", "package.json"];
+        console.error("JSON Error:", e);
+    }
+
+    // Ensure we have at least something to build
+    if (!filesToBuild || filesToBuild.length === 0) {
+        filesToBuild = ["index.js", "package.json", "README.md"];
     }
 
     const finalFiles = [];
