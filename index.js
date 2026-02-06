@@ -59,24 +59,36 @@ function getTemporalAnchor() {
 }
 
 
-// --- DESTROYER PERSONAS ---
+// --- GOD-MODE PERSONAS ---
 const PERSONAS = {
-    ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file project.
-1. Provide a "PROJECT_OVERVIEW" in markdown.
-2. Provide a "FILE_LIST" in JSON array format at the very end. 
-FORMAT:
-[OVERVIEW_START]
-Markdown here...
-[OVERVIEW_END]
-[FILE_LIST: ["file1.ext", "file2.ext"]]
+    ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file "God-Mode" project.
+1. Provide a "PROJECT_OVERVIEW" in markdown (Features & Tech).
+2. Provide a "FILE_LIST" in JSON array format.
 
-CRITICAL: The FILE_LIST must be a valid JSON array of strings. No extra text inside the brackets.`,
+RULES:
+- NO BLOAT: Only include dependencies strictly necessary for core features.
+- REALISM: Avoid experimental/quantum junk.
+- PRECISION: Every file must serve a clear purpose.
+[OVERVIEW_START]...[OVERVIEW_END]
+[FILE_LIST: ["file1.ext", "file2.ext"]]`,
 
-    BUILDER: `You are GHOST-BUILDER. Write HIGH-END, professional code for a specific file.
-Ensure the code is COMPLETE, massive in scope if needed, and fully functional.
-Wrap the code in [FILE_START:filename] and [FILE_END]. No chatter.`,
+    // Expert Builders
+    BACKEND: `You are GHOST-BACKEND. Write elite, efficient backend code. 
+Only import what you actually use. No requirement bloat. 
+wrap in [FILE_START:filename]...[FILE_END]`,
 
-    AUDITOR: `You are GHOST-AUDITOR. Review the swarm's work for perfection. Security must be elite.`
+    FRONTEND: `You are GHOST-FRONTEND. Write premium UI code. 
+Focus on optimization and modern aesthetics without bloat. 
+wrap in [FILE_START:filename]...[FILE_END]`,
+
+    DATABASE: `You are GHOST-DB-ARCHITECT. Write clean, optimized schemas. 
+wrap in [FILE_START:filename]...[FILE_END]`,
+
+    SECURITY: `You are GHOST-SECURITY. Implement hardened, focused security logic. 
+Avoid hallucinating complex stacks; focus on the TASK. 
+wrap in [FILE_START:filename]...[FILE_END]`,
+
+    AUDITOR: `You are GHOST-AUDITOR. Final review for bugs, leaks, and logic flaws.`
 };
 
 const GHOST_SYSTEM_PROMPT = `
@@ -95,7 +107,7 @@ Your goal is to generate professional, multi-file projects.
 // --- SWARM ENGINE ---
 async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
     // 1. ARCHITECT PHASE
-    statusEmbed.setDescription('`[▓░░░░░░░░░]` 10% - [ARCHITECT]: Drafting Master Plan...');
+    statusEmbed.setDescription('`[▓░░░░░░░░░]` 10% - [ARCHITECT]: Deep-Planning Mission...');
     await statusMsg.edit({ embeds: [statusEmbed] });
 
     const planRes = await mistral.chat.complete({
@@ -107,46 +119,42 @@ async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
     });
 
     const planContent = planRes.choices[0].message.content;
-
-    // Extract Overview
     const overviewMatch = planContent.match(/\[OVERVIEW_START\]([\s\S]*?)\[OVERVIEW_END\]/);
-    const overviewText = overviewMatch ? overviewMatch[1].trim() : "🚀 Destroyer Mission Initialized.";
+    const overviewText = overviewMatch ? overviewMatch[1].trim() : "🚀 Destroyer Mission Active.";
 
     // Extract File List Robustly
-    let filesToBuild = ["main.py", "requirements.txt"];
+    let filesToBuild = [];
     try {
         const fileListMatch = planContent.match(/\[FILE_LIST:\s*([\s\S]*?)\]/);
         if (fileListMatch) {
-            let jsonStr = fileListMatch[1].trim();
-            // Remove potential markdown code block markers
-            jsonStr = jsonStr.replace(/```json|```/g, '').trim();
-            // Find the start [ and end ]
-            const startIdx = jsonStr.indexOf('[');
-            const endIdx = jsonStr.lastIndexOf(']');
-            if (startIdx !== -1 && endIdx !== -1) {
-                jsonStr = jsonStr.substring(startIdx, endIdx + 1);
-                filesToBuild = JSON.parse(jsonStr);
-            }
+            let jsonStr = fileListMatch[1].trim().replace(/```json|```/g, '');
+            filesToBuild = JSON.parse(jsonStr);
         }
     } catch (e) {
-        console.error("Architect JSON Parse Error:", e);
-        // Fallback to basic files if JSON fails
+        filesToBuild = ["index.js", "package.json"];
     }
 
     const finalFiles = [];
     let progress = 0;
 
-    // 2. BUILDER PHASE
+    // 2. BUILDER SWARM PHASE
     for (const fileName of filesToBuild) {
-        progress += (70 / filesToBuild.length);
-        statusEmbed.setDescription(`\`[▓▓▓▓░░░░░░]\` ${Math.round(10 + progress)}% - [BUILDER]: Constructing ${fileName}...`);
+        progress += (80 / filesToBuild.length);
+
+        // Dynamic Persona Selection
+        let persona = PERSONAS.BACKEND;
+        if (fileName.match(/\.(html|css|jsx|tsx)$/)) persona = PERSONAS.FRONTEND;
+        if (fileName.match(/\.(sql|prisma|db)$/)) persona = PERSONAS.DATABASE;
+        if (fileName.match(/(security|auth|jwt|encrypt)/i)) persona = PERSONAS.SECURITY;
+
+        statusEmbed.setDescription(`\`[▓▓▓▓▓░░░░░]\` ${Math.round(10 + progress)}% - [SWARM]: Building ${fileName}...`);
         await statusMsg.edit({ embeds: [statusEmbed] });
 
         const fileRes = await mistral.chat.complete({
             model: 'mistral-large-latest',
             messages: [
-                { role: 'system', content: PERSONAS.BUILDER },
-                { role: 'user', content: `MASTER PLAN: ${planContent}\nBUILD FILE: ${fileName}\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}\nTASK: Write the FULL, massive-scale code for ${fileName}.` }
+                { role: 'system', content: persona },
+                { role: 'user', content: `MASTER PLAN: ${planContent}\nTASK: Write the FULL, elite-level code for ${fileName}.\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}` }
             ]
         });
 
@@ -156,7 +164,7 @@ async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
     }
 
     // 3. AUDITOR PHASE
-    statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 95% - [AUDITOR]: Final Polish & Security Scan...');
+    statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓░]` 95% - [AUDITOR]: Final Validation & Hardening...');
     await statusMsg.edit({ embeds: [statusEmbed] });
 
     return { files: finalFiles, overview: overviewText };
@@ -208,17 +216,21 @@ client.on('messageCreate', async (message) => {
 
         const statusEmbed = new EmbedBuilder()
             .setColor('#11ff00')
-            .setTitle('⚡ GHOST-CODER: DESTROYER_MODE')
-            .setDescription('`[░░░░░░░░░░]` 0% - Initializing Swarm...')
+            .setTitle('🛡️ GHOST-CODER: GOD-MODE_ACTIVE')
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/2592/2592317.png') // Expert shield
+            .setDescription('`[░░░░░░░░░░]` 0% - **Booting Expert Swarm...**')
+            .addFields({ name: 'Mission', value: prompt.slice(0, 100) + (prompt.length > 100 ? '...' : '') })
             .setTimestamp();
 
         const statusMsg = await message.reply({ embeds: [statusEmbed] });
 
         try {
             const context = await getContext(message.guild);
+            const state = await getGhostState(message.author.id);
+            const fullPrompt = state?.last_plan ? `PLAN APPROVED. BUILD: ${state.last_plan}\nUSER REQUEST: ${prompt}` : prompt;
 
-            // USE SWARM ENGINE
-            const swarmResult = await swarmGenerate(prompt, context, statusMsg, statusEmbed);
+            // USE GOD-MODE SWARM ENGINE
+            const swarmResult = await swarmGenerate(fullPrompt, context, statusMsg, statusEmbed);
             const { files, overview } = swarmResult;
 
             await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: prompt });
@@ -226,23 +238,44 @@ client.on('messageCreate', async (message) => {
             if (files.length > 0) {
                 const zip = new AdmZip();
                 files.forEach(f => zip.addFile(f.name, Buffer.from(f.content, 'utf8')));
-                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'ghost_destroyer_project.zip' });
+                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'ghost_godmode_project.zip' });
 
-                statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Mission Successful!');
+                statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - **God-Mode Build Successful!**');
                 const row = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('new_project').setLabel('New Project').setStyle(ButtonStyle.Success),
                     new ButtonBuilder().setCustomId('tweak_last').setLabel('Tweak Last').setStyle(ButtonStyle.Primary)
                 );
                 await statusMsg.edit({ embeds: [statusEmbed], components: [row] });
-                await message.reply({ content: `🚀 **DESTROYER-BUILD-COMPLETE**\n\n${overview.slice(0, 500)}...`, files: [attachment] });
+                await message.reply({ content: `🔱 **GOD-MODE-DEPLOYED**\n\n${overview.slice(0, 1000)}`, files: [attachment] });
             } else {
                 statusEmbed.setDescription('❌ Swarm failed to generate files.');
                 await statusMsg.edit({ embeds: [statusEmbed] });
             }
         } catch (error) {
             console.error(error);
-            await statusMsg.edit({ content: `❌ Destroyer Error: ${error.message}`, embeds: [] });
+            await statusMsg.edit({ content: `❌ God-Mode Error: ${error.message}`, embeds: [] });
         }
+    }
+
+    // COMMAND: !brainstorm / !chat
+    if (command === 'brainstorm' || command === 'chat') {
+        const query = args.join(' ');
+        if (!query) return message.reply('Bhai, kya discuss karna hai? `!brainstorm <your_idea>`');
+
+        const state = await getGhostState(message.author.id);
+        const history = state?.last_plan || "No previous plan.";
+
+        const response = await mistral.chat.complete({
+            model: 'mistral-large-latest',
+            messages: [
+                { role: 'system', content: 'You are GHOST-CONSULTANT. Help the user plan their project. Ask smart questions about tech stack, features, and security. Keep it professional but "badass". If they are ready, tell them to use !spawn.' },
+                { role: 'user', content: `HISTORY: ${history}\nUSER_QUERY: ${query}` }
+            ]
+        });
+
+        const reply = response.choices[0].message.content;
+        await saveGhostState(message.author.id, { ...state, last_plan: reply }); // Save planning context
+        return message.reply(`💬 **GHOST-PLANNING-SESSION**\n\n${reply}`);
     }
 
     // COMMAND: !tweak
@@ -255,15 +288,14 @@ client.on('messageCreate', async (message) => {
 
         const statusEmbed = new EmbedBuilder()
             .setColor('#0099ff')
-            .setTitle('🔄 GHOST-CODER: RE-ARCHITECTING...')
-            .setDescription('`[▓░░░░░░░░░]` 10% - Re-syncing Swarm...');
+            .setTitle('🔄 GHOST-CODER: RE-BUILDING...')
+            .setDescription('`[▓░░░░░░░░░]` 10% - Re-syncing Expert Swarm...');
         const statusMsg = await message.reply({ embeds: [statusEmbed] });
 
         try {
             const context = await getContext(message.guild);
 
-            // Swarm Tweak Logic
-            const swarmResult = await swarmGenerate(`TWEAK PREVIOUS PROJECT. Changes: ${tweakRequest}. PREVIOUS STATE: ${state.last_response}`, context, statusMsg, statusEmbed);
+            const swarmResult = await swarmGenerate(`TWEAK PROJECT. Changes: ${tweakRequest}. PREVIOUS_STATE: ${state.last_response}`, context, statusMsg, statusEmbed);
             const { files, overview } = swarmResult;
 
             await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: tweakRequest });
@@ -271,8 +303,8 @@ client.on('messageCreate', async (message) => {
             if (files.length > 0) {
                 const zip = new AdmZip();
                 files.forEach(f => zip.addFile(f.name, Buffer.from(f.content, 'utf8')));
-                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'tweak_destroyer_project.zip' });
-                await statusMsg.edit({ embeds: [statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Tweak Complete!')] });
+                const attachment = new AttachmentBuilder(zip.toBuffer(), { name: 'tweak_godmode_project.zip' });
+                await statusMsg.edit({ embeds: [statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓▓▓]` 100% - Tweak Successful!')] });
                 await message.reply({ content: `🔄 **TWEAK-DEPLOYED**\n\n${overview.slice(0, 500)}...`, files: [attachment] });
             } else {
                 await statusMsg.edit({ content: 'Complete.', embeds: [] });
@@ -287,12 +319,13 @@ client.on('messageCreate', async (message) => {
     if (command === 'commands' || command === 'help') {
         const helpEmbed = new EmbedBuilder()
             .setColor('#11ff00')
-            .setTitle('📂 GHOST-CODER: COMMAND_LIST')
-            .setDescription('Elite Bot Architecture Interface')
+            .setTitle('🔱 GHOST-CODER: GOD-MODE_INTERFACE')
+            .setDescription('Elite Multi-Agent Orchestration & Planning')
             .addFields(
-                { name: '`!spawn <prompt>`', value: 'Generate a new project (Automatic ZIP if multi-file).' },
-                { name: '`!tweak <instructions>`', value: 'Modify the last generated project using Ghost Memory.' },
-                { name: '`!ghost`', value: 'Open the Architect Dashboard.' }
+                { name: '`!brainstorm <idea>`', value: 'Chat with the Architect to plan your project before building.' },
+                { name: '`!spawn <prompt>`', value: 'Execute the project build with the Expert Swarm.' },
+                { name: '`!tweak <instructions>`', value: 'Modify the project using expert agents.' },
+                { name: '`!ghost`', value: 'Open the God-Mode Dashboard.' }
             )
             .setTimestamp();
         return message.reply({ embeds: [helpEmbed] });
@@ -302,12 +335,12 @@ client.on('messageCreate', async (message) => {
     if (command === 'ghost') {
         const dashEmbed = new EmbedBuilder()
             .setColor('#11ff00')
-            .setTitle('🖥️ GHOST-CODER: SYSTEM_DASHBOARD')
-            .setThumbnail('https://cdn-icons-png.flaticon.com/512/606/606587.png') // Clean terminal icon
-            .setDescription('**STATUS:** `OPERATIONAL`\n**CORE:** `Mistral-Large`\n**DATABASE:** `Neon PostgreSQL`')
+            .setTitle('🔱 GHOST-CODER: GOD-MODE_DASHBOARD')
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/606/606587.png')
+            .setDescription('**STATUS:** `GOD-MODE ACTIVE`\n**ENGINE:** `Expert Swarm v2`\n**DATABASE:** `Neon PostgreSQL`')
             .addFields(
+                { name: '🤖 Agents', value: 'Architect, Backend, Frontend, DB, Security', inline: false },
                 { name: '💾 Persistence', value: 'Active (Ghost Memory)', inline: true },
-                { name: '🌐 Language', value: 'Polyglot (Any)', inline: true },
                 { name: '⚡ Latency', value: 'Optimized', inline: true }
             );
 
@@ -319,6 +352,7 @@ client.on('messageCreate', async (message) => {
 
         return message.reply({ embeds: [dashEmbed], components: [row] });
     }
+
 });
 
 client.on('interactionCreate', async (interaction) => {
