@@ -235,9 +235,14 @@ client.on('messageCreate', async (message) => {
     if (command === 'ghost') {
         const dashEmbed = new EmbedBuilder()
             .setColor('#11ff00')
-            .setTitle('🖥️ GHOST-CODER: DASHBOARD')
-            .setDescription('Status: **Ghost-Core Online**\nMemory: **PostgreSQL Persistent**\nTarget: **Multi-Language / Polyglot**')
-            .setImage('https://i.imgur.com/kS5xS4M.png'); // Placeholder for aesthetic
+            .setTitle('🖥️ GHOST-CODER: SYSTEM_DASHBOARD')
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/606/606587.png') // Clean terminal icon
+            .setDescription('**STATUS:** `OPERATIONAL`\n**CORE:** `Mistral-Large`\n**DATABASE:** `Neon PostgreSQL`')
+            .addFields(
+                { name: '💾 Persistence', value: 'Active (Ghost Memory)', inline: true },
+                { name: '🌐 Language', value: 'Polyglot (Any)', inline: true },
+                { name: '⚡ Latency', value: 'Optimized', inline: true }
+            );
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('new_project').setLabel('New Project').setStyle(ButtonStyle.Success),
@@ -246,6 +251,26 @@ client.on('messageCreate', async (message) => {
         );
 
         return message.reply({ embeds: [dashEmbed], components: [row] });
+    }
+});
+
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    try {
+        if (interaction.customId === 'new_project') {
+            await interaction.reply({ content: '⚡ **GHOST-INIT**: Naya project start karne ke liye channel mein `!spawn <aapka_prompt>` likhein.', ephemeral: true });
+        } else if (interaction.customId === 'tweak_last') {
+            await interaction.reply({ content: '🔄 **GHOST-RE-SYNC**: Pichle project ko tweak karne ke liye `!tweak <instructions>` use karein.', ephemeral: true });
+        } else if (interaction.customId === 'tweak_help') {
+            const helpEmbed = new EmbedBuilder()
+                .setColor('#11ff00')
+                .setTitle('🛠️ GHOST-TWEAK-GUIDE')
+                .setDescription('Iterative modifications ke liye instructions:\n\n1. `!tweak add a logger to all events`\n2. `!tweak change language to python`\n3. `!tweak fix the token error`');
+            await interaction.reply({ embeds: [helpEmbed], ephemeral: true });
+        }
+    } catch (e) {
+        console.error('Interaction Error:', e);
     }
 });
 
