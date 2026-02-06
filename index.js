@@ -61,16 +61,20 @@ function getTemporalAnchor() {
 
 // --- SYSTEM PROMPT ---
 const GHOST_SYSTEM_PROMPT = `
-You are GHOST-CODER, an elite AI Bot Architect specialized in Discord bots and Red-Teaming tools.
-Your goal is to generate professional, clean, and pre-configured code for high-end projects in ANY language.
+You are GHOST-CODER, an elite AI Bot Architect.
+Your goal is to generate professional, multi-file projects.
 
-### YOUR RULES:
-1. ALWAYS use the provided Server Context (Channel IDs, Roles, etc.) to pre-configure the code. No placeholders.
-2. Use a modular structure with [FILE_START:filename] tags for multi-file projects.
-3. Include deployment configs (Procfile, Dockerfile, etc.) if requested.
-4. You are aware of the current date/time via the Temporal Anchor.
-5. You remember previous interactions via the Ghost Memory state provided in the user's prompt.
-6. Act like a high-end terminal; keep responses concise and focused.
+### CRITICAL TAG RULES:
+1. Every file MUST be delimited EXACTLY like this (NO BOLD, NO HEADERS, NO MARKDOWN AROUND THEM):
+   [FILE_START:filename.ext]
+   // Raw code content here (DO NOT use \`\`\` code blocks inside the file)
+   [FILE_END]
+
+2. Start the response with a very brief overview, then immediately list the files.
+3. Use the provided Server Context to pre-configure IDs.
+4. If a specific deployment is mentioned, include the config files.
+5. You are an elite terminal; keep chatter to a MINIMUM. Prioritize the code.
+6. Temporal Anchor & Memory are provided in the user prompt.
 `;
 
 // --- UTILS ---
@@ -86,13 +90,23 @@ async function getContext(guild) {
 
 function parseFiles(content) {
     const files = [];
-    const regex = /\[FILE_START:(.+?)\]([\s\S]*?)\[FILE_END\]/g;
+    // Flexible regex: handles optional [FILE_END], looks ahead for next [FILE_START] or end of string
+    const regex = /\[FILE_START:(.+?)\]([\s\S]*?)(?=\[FILE_START:|\[FILE_END\]|$)/g;
     let match;
     while ((match = regex.exec(content)) !== null) {
-        files.push({ name: match[1].trim(), content: match[2].trim() });
+        let fileName = match[1].trim().replace(/[*#]/g, ''); // Clean name
+        let fileContent = match[2].trim();
+
+        // Strip out triple backticks if the AI accidentally wrapped the content
+        fileContent = fileContent.replace(/^```[a-z]*\n/i, '').replace(/\n```$/m, '');
+
+        if (fileName && fileContent) {
+            files.push({ name: fileName, content: fileContent });
+        }
     }
     return files;
 }
+
 
 // --- CORE LOGIC ---
 client.on('messageCreate', async (message) => {
