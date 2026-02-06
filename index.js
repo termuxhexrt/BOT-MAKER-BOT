@@ -62,15 +62,21 @@ function getTemporalAnchor() {
 // --- DESTROYER PERSONAS ---
 const PERSONAS = {
     ARCHITECT: `You are GHOST-ARCHITECT. Plan a production-grade multi-file project.
-Output a JSON list of files with their descriptions. FORMAT: [FILE_LIST: ["file1.ext", "file2.ext"]]
-Keep chatter minimal. Focus on security and "Destroyer" level quality.`,
+1. Provide a "PROJECT_OVERVIEW" in markdown (3-4 sentences about features and architecture).
+2. Provide a "FILE_LIST" in JSON format at the end.
+FORMAT:
+[OVERVIEW_START]
+Markdown here...
+[OVERVIEW_END]
+[FILE_LIST: ["file1.ext", "file2.ext"]]
 
-    BUILDER: `You are GHOST-BUILDER. You write high-end, production-ready code for a specific file in a project.
-Use the Context and Master Plan to ensure the code works perfectly with other files.
-ALWAYS wrap the code in [FILE_START:filename] and [FILE_END].`,
+Focus on "Destroyer" level quality and deep security.`,
 
-    AUDITOR: `You are GHOST-AUDITOR. Review the generated project for bugs, missing imports, or security leaks.
-Provide a concise list of fixes or enhancements if needed.`
+    BUILDER: `You are GHOST-BUILDER. Write HIGH-END, professional code for a specific file.
+Ensure the code is COMPLETE, massive in scope if needed, and fully functional.
+Wrap the code in [FILE_START:filename] and [FILE_END]. No chatter.`,
+
+    AUDITOR: `You are GHOST-AUDITOR. Review the swarm's work for perfection. Security must be elite.`
 };
 
 const GHOST_SYSTEM_PROMPT = `
@@ -78,16 +84,12 @@ You are GHOST-CODER, an elite AI Bot Architect.
 Your goal is to generate professional, multi-file projects.
 
 ### CRITICAL TAG RULES:
-1. Every file MUST be delimited EXACTLY like this (NO BOLD, NO HEADERS, NO MARKDOWN AROUND THEM):
+1. Every file MUST be delimited EXACTLY like this:
    [FILE_START:filename.ext]
-   // Raw code content here (DO NOT use \`\`\` code blocks inside the file)
+   // Raw code
    [FILE_END]
-
-2. Start the response with a very brief overview, then immediately list the files.
-3. Use the provided Server Context to pre-configure IDs.
-4. If a specific deployment is mentioned, include the config files.
-5. You are an elite terminal; keep chatter to a MINIMUM. Prioritize the code.
-6. Temporal Anchor & Memory are provided in the user prompt.
+2. Use Provided Server Context.
+3. Keep chatter to a MINIMUM.
 `;
 
 // --- SWARM ENGINE ---
@@ -105,37 +107,44 @@ async function swarmGenerate(prompt, context, statusMsg, statusEmbed) {
     });
 
     const planContent = planRes.choices[0].message.content;
+
+    // Extract Overview
+    const overviewMatch = planContent.match(/\[OVERVIEW_START\]([\s\S]*?)\[OVERVIEW_END\]/);
+    const overviewText = overviewMatch ? overviewMatch[1].trim() : "🚀 Destroyer Mission Initialized.";
+
+    // Extract File List
     const fileListMatch = planContent.match(/\[FILE_LIST:\s*(\[.*?\])\]/s);
     const filesToBuild = fileListMatch ? JSON.parse(fileListMatch[1]) : ["index.js", "package.json", "README.md"];
 
     const finalFiles = [];
     let progress = 0;
 
-    // 2. BUILDER PHASE (Parallel or Sequential - Sequential is safer for tokens)
+    // 2. BUILDER PHASE
     for (const fileName of filesToBuild) {
         progress += (70 / filesToBuild.length);
-        statusEmbed.setDescription(`\`[▓▓▓▓░░░░░░]\` ${Math.round(10 + progress)}% - [BUILDER]: Writing ${fileName}...`);
+        statusEmbed.setDescription(`\`[▓▓▓▓░░░░░░]\` ${Math.round(10 + progress)}% - [BUILDER]: Constructing ${fileName}...`);
         await statusMsg.edit({ embeds: [statusEmbed] });
 
         const fileRes = await mistral.chat.complete({
             model: 'mistral-large-latest',
             messages: [
                 { role: 'system', content: PERSONAS.BUILDER },
-                { role: 'user', content: `MASTER PLAN: ${planContent}\nBUILD FILE: ${fileName}\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}` }
+                { role: 'user', content: `MASTER PLAN: ${planContent}\nBUILD FILE: ${fileName}\nCONTEXT: ${context}\nANCHOR: ${getTemporalAnchor()}\nTASK: Write the FULL, massive-scale code for ${fileName}.` }
             ]
         });
 
         const extracted = parseFiles(fileRes.choices[0].message.content);
         if (extracted.length > 0) finalFiles.push(...extracted);
-        else finalFiles.push({ name: fileName, content: fileRes.choices[0].message.content });
+        else finalFiles.push({ name: fileName.replace(/[*#]/g, ''), content: fileRes.choices[0].message.content });
     }
 
     // 3. AUDITOR PHASE
-    statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 90% - [AUDITOR]: Running final security check...');
+    statusEmbed.setDescription('`[▓▓▓▓▓▓▓▓░░]` 95% - [AUDITOR]: Final Polish & Security Scan...');
     await statusMsg.edit({ embeds: [statusEmbed] });
 
-    return { files: finalFiles, overview: planContent };
+    return { files: finalFiles, overview: overviewText };
 }
+
 
 // --- UTILS ---
 async function getContext(guild) {
