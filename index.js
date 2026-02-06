@@ -33,25 +33,42 @@ async function initDB() {
         CREATE TABLE IF NOT EXISTS user_states (
             user_id TEXT PRIMARY KEY,
             last_response TEXT,
-            last_prompt TEXT
+            last_prompt TEXT,
+            last_plan TEXT
         )
     `);
+    // Migration: Add last_plan if it doesn't exist (using safe ALTER)
+    try {
+        await pool.query('ALTER TABLE user_states ADD COLUMN IF NOT EXISTS last_plan TEXT');
+    } catch (e) {
+        // Column might already exist or other DB issues
+    }
     console.log('Neon DB Initialized.');
 }
 
+
 async function getGhostState(userId) {
     const res = await pool.query('SELECT * FROM user_states WHERE user_id = $1', [userId]);
-    return res.rows[0];
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+        lastResponse: row.last_response,
+        lastPrompt: row.last_prompt,
+        lastPlan: row.last_plan
+    };
 }
 
 async function saveGhostState(userId, state) {
     await pool.query(`
-        INSERT INTO user_states (user_id, last_response, last_prompt)
-        VALUES ($1, $2, $3)
+        INSERT INTO user_states (user_id, last_response, last_prompt, last_plan)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (user_id) DO UPDATE 
-        SET last_response = EXCLUDED.last_response, last_prompt = EXCLUDED.last_prompt
-    `, [userId, state.lastResponse, state.lastPrompt]);
+        SET last_response = EXCLUDED.last_response, 
+            last_prompt = EXCLUDED.last_prompt,
+            last_plan = EXCLUDED.last_plan
+    `, [userId, state.lastResponse, state.lastPrompt, state.lastPlan]);
 }
+
 
 function getTemporalAnchor() {
     const now = new Date();
@@ -234,13 +251,17 @@ client.on('messageCreate', async (message) => {
         try {
             const context = await getContext(message.guild);
             const state = await getGhostState(message.author.id);
-            const fullPrompt = state?.last_plan ? `PLAN APPROVED. BUILD: ${state.last_plan}\nUSER REQUEST: ${prompt}` : prompt;
+            const fullPrompt = state?.lastPlan ? `PLAN APPROVED. BUILD: ${state.lastPlan}\nUSER REQUEST: ${prompt}` : prompt;
 
             // USE GOD-MODE SWARM ENGINE
             const swarmResult = await swarmGenerate(fullPrompt, context, statusMsg, statusEmbed);
             const { files, overview } = swarmResult;
 
-            await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: prompt });
+            await saveGhostState(message.author.id, {
+                lastResponse: JSON.stringify(files),
+                lastPrompt: prompt,
+                lastPlan: state?.lastPlan
+            });
 
             if (files.length > 0) {
                 const zip = new AdmZip();
@@ -270,7 +291,7 @@ client.on('messageCreate', async (message) => {
         if (!query) return message.reply('Bhai, kya discuss karna hai? `!brainstorm <your_idea>`');
 
         const state = await getGhostState(message.author.id);
-        const history = state?.last_plan || "No previous plan.";
+        const history = state?.lastPlan || "No previous plan.";
 
         const response = await mistral.chat.complete({
             model: 'mistral-large-latest',
@@ -281,7 +302,7 @@ client.on('messageCreate', async (message) => {
         });
 
         const reply = response.choices[0].message.content;
-        await saveGhostState(message.author.id, { ...state, last_plan: reply }); // Save planning context
+        await saveGhostState(message.author.id, { ...state, lastPlan: reply }); // Save planning context
         return message.reply(`💬 **GHOST-PLANNING-SESSION**\n\n${reply}`);
     }
 
@@ -302,10 +323,14 @@ client.on('messageCreate', async (message) => {
         try {
             const context = await getContext(message.guild);
 
-            const swarmResult = await swarmGenerate(`TWEAK PROJECT. Changes: ${tweakRequest}. PREVIOUS_STATE: ${state.last_response}`, context, statusMsg, statusEmbed);
+            const swarmResult = await swarmGenerate(`TWEAK PROJECT. Changes: ${tweakRequest}. PREVIOUS_STATE: ${state.lastResponse}`, context, statusMsg, statusEmbed);
             const { files, overview } = swarmResult;
 
-            await saveGhostState(message.author.id, { lastResponse: JSON.stringify(files), lastPrompt: tweakRequest });
+            await saveGhostState(message.author.id, {
+                lastResponse: JSON.stringify(files),
+                lastPrompt: tweakRequest,
+                lastPlan: state?.lastPlan
+            });
 
             if (files.length > 0) {
                 const zip = new AdmZip();
